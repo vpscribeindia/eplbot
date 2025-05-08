@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPL vs TCH</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" integrity="sha512-Kc323vGBEqzTmouAECnVceyQqyqdsSiqLQISBL29aUW4U/M7pSPA/gEUZQqv1cwx4OnYxTxve5UMg5GT6L4JJg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/momentjs/latest/moment.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/moment-timezone/builds/moment-timezone-with-data.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/js/all.min.js" integrity="sha512-6sSYJqDreZRZGkJ3b+YfdhB3MzmuP9R7X1QZ6g5aIXhRvR1Y/N/P47jmnkENm7YL3oqsmI6AK+V6AD99uWDnIw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <style>
+        .top-scrollbar {
+            overflow-x: auto;
+            overflow-y: hidden;
+            height: 30px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background-color: #f8f9fa;
+            border-bottom: 2px solid #dee2e6; 
+        }
+
+        .top-scrollbar div {
+            height: 1px;
+        }
+
+        .scrollable-table {
+            overflow-y: auto;
+            max-height: 80vh;
+        }
+
+        .scrollable-table::-webkit-scrollbar {
+            display: none;
+        }
+        .top-scrollbar::-webkit-scrollbar {
+            height: 10px;
+    background-color: #ffffff;
+        }
+        .top-scrollbar::-webkit-scrollbar-thumb {
+    border-radius: 10px;
+    background-color: #299cd6;
+    background-image: -webkit-gradient(linear, 40% 0%, 75% 84%, from(#ff5f5f), to(#fb7777), color-stop(.6, #fffa69))
+}
+        .scrollable-table {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+            position: relative;
+        }
+
+        thead{
+            position: sticky;
+            top: 0;
+            background-color: #ffffff; 
+            z-index: 10; 
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        thead tr:first-child th:first-child, tbody td:first-child {
+            position: sticky;
+            left: 0;
+            background-color: #ff4a4a;
+            z-index: 9;
+            color: #f8f9fa;
+            border-right: 2px solid #dee2e6;
+        }
+
+  
+        @media (max-width: 768px) {
+            .table th, .table td {
+                font-size: 0.875rem; 
+            }
+
+            .top-scrollbar {
+                height: 20px; 
+            }
+        }
+
+   
+        .table {
+            border-collapse: collapse;
+        }
+
+        .table th, .table td {
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .table th {
+            background-color: #54a7ff !important; 
+            color: #ffffff;
+        }
+        .highlight{
+            background-color: #299cd6 !important;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h3 class="mb-md-3 mb-4 text-center">EPL vs TCH Data Analysis</h3>
+        <a href="https://localhost:8000/" class="btn btn-primary position-fixed" style="top: 10px; left: 10px;"><i class="fa fa-line-chart"></i></a>
+        <div class="form-group row justify-content-center mb-2">
+            <label for="datePicker" class="form-label col-lg-1 col-md-1 col-3">Select Date:</label>
+        <div class="col-lg-3 col-md-4 col-9">
+            <input type="date" id="datePicker" class="form-control" />
+        </div>
+    </div>
+        <div class="top-scrollbar">
+            <div></div> 
+        </div>
+        <div class="scrollable-table">
+            <table id="combinedTable" class="table table-striped-columns table-hover">
+                <thead>
+                    <tr>
+                        <th rowspan="2">GAME NAME</th>
+                        
+                    </tr>
+                    <tr id="subHeader">
+                        
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+
+    <script>
+    $(document).ready(function() {
+        moment.tz.setDefault("America/Chicago");
+
+        var selectedDate = moment().format('YYYY-MM-DD');
+        $('#datePicker').val(selectedDate);
+
+        $('#datePicker').on('change', function() {
+            selectedDate = $(this).val();
+            if (selectedDate) {
+                fetchDataForDate(selectedDate);
+            }
+        });
+
+        function fetchDataForDate(selectedDate) {
+            $.ajax({
+                url: `http://localhost:8000/fetch-data?startdate=${encodeURIComponent(selectedDate)}`,
+                method: 'GET',
+                dataType: 'json',
+                success: function(data) {
+                    populateTable(data, selectedDate);
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error fetching data:', xhr.responseText);
+                    alert('Error fetching data for the selected date.');
+                }
+            });
+        }
+
+        function roundToNearest30Minutes(timestamp) {
+            var time = moment.tz(timestamp, 'YYYY-MM-DD hh:mm A', 'America/Chicago');
+            var roundedTime = time.clone().startOf('minute');
+            var minutes = roundedTime.minutes();
+            var roundedMinutes = Math.round(minutes / 30) * 30;
+            roundedTime.minutes(roundedMinutes).seconds(0);
+            return roundedTime.format('YYYY-MM-DD hh:mm A');
+        }
+
+        function populateTable(data, selectedDate) {
+    
+
+    $('#combinedTable thead tr').not(':first').remove(); 
+    $('#combinedTable tbody').empty(); 
+
+    var intervals = [];
+    var start = moment.tz(selectedDate + ' 12:00 AM', 'YYYY-MM-DD hh:mm A', 'America/Chicago');
+    var end = moment.tz(selectedDate + ' 11:30 PM', 'YYYY-MM-DD hh:mm A', 'America/Chicago');
+
+    while (start <= end) {
+        intervals.push(start.format('YYYY-MM-DD hh:mm A'));
+        start.add(30, 'minutes');
+    }
+
+    var headerHtml = '';
+    var subHeaderHtml = '';
+    
+    var color00 = '#e0f7fa'; 
+    var color30 = '#ffecb3';
+    
+    intervals.forEach(function(interval) {
+        var minute = moment(interval, 'YYYY-MM-DD hh:mm A').minute();
+        var color = (minute === 0) ? color00 : color30;  
+
+        headerHtml += `<th colspan="2" style="background-color:${color};">${moment(interval, 'YYYY-MM-DD hh:mm A').format('hh:mm A')}</th>`;
+        subHeaderHtml += `<th style="background-color:${color};">EPL</th><th style="background-color:${color};">TCH</th>`;
+    });
+
+    $('#combinedTable thead').empty(); 
+    $('#combinedTable thead').append('<tr><th rowspan="2">GAME NAME</th>' + headerHtml + '</tr>');
+    $('#combinedTable thead').append('<tr id="subHeader">' + subHeaderHtml + '</tr>');
+
+    var combinedData = {};
+    var eplGames = new Set();
+    var competitorGames = new Set();
+
+    function normalizeGameName(gameName) {
+        const dollarIndex = gameName.indexOf('$');
+        const cleanedName = dollarIndex !== -1
+            ? gameName.slice(dollarIndex).replace(/"/g, '').replace(/\$/g, '').toLowerCase().trim()
+            : gameName.toLowerCase().trim();
+        return cleanedName;
+    }
+    function formatGameName(gameName) {
+  if (/^\d/.test(gameName)) {
+    return `$${gameName.toUpperCase()}`;
+  }
+  return gameName.toUpperCase();
+}
+    function processTableData(tableData, type) {
+        if (tableData && tableData.labels) {
+            tableData.labels.forEach(function(timestamp, index) {
+                var gameName = normalizeGameName(tableData.game_name[index]);
+                var time = roundToNearest30Minutes(timestamp);
+                var tables = tableData.tables[index];
+
+                if (!combinedData[gameName]) {
+                    combinedData[gameName] = {};
+                }
+                combinedData[gameName][time] = combinedData[gameName][time] || {};
+                combinedData[gameName][time][type] = tables;
+
+                if (type === 'EPL') {
+                    eplGames.add(gameName);
+                } else if (type === 'Competitor') {
+                    competitorGames.add(gameName);
+                }
+            });
+        }
+    }
+
+    processTableData(data.EPL, 'EPL');
+    processTableData(data.Competitor, 'Competitor');
+
+    var commonGames = [...eplGames].filter(game => competitorGames.has(game));
+    var remainingGames = [...new Set([...eplGames, ...competitorGames])].filter(game => !commonGames.includes(game)).sort();
+    var sortedGames = [...commonGames, ...remainingGames];
+
+    var processedData = {};
+
+    Object.keys(combinedData).forEach(function(game_name) {
+        processedData[game_name] = {};
+        Object.keys(combinedData[game_name]).forEach(function(timestamp) {
+            var roundedTimestamp = roundToNearest30Minutes(timestamp);
+            if (!processedData[game_name][roundedTimestamp]) {
+                processedData[game_name][roundedTimestamp] = {};
+            }
+            processedData[game_name][roundedTimestamp] = {
+                ...processedData[game_name][roundedTimestamp],
+                ...combinedData[game_name][timestamp]
+            };
+        });
+    });
+
+    sortedGames.forEach(function(game_name) {
+        var isCommon = commonGames.includes(game_name);
+        var rowHtml = `<tr class="${isCommon ? 'table-active fw-bold' : ''}"><td>${formatGameName(game_name)}</td>`;
+        intervals.forEach(function(interval) {
+            var tables = processedData[game_name] && processedData[game_name][interval] ? processedData[game_name][interval] : {};
+            var tablesEPL = tables['EPL'] !== undefined ? tables['EPL'] : '-';
+            var tablesCompetitor = tables['Competitor'] !== undefined ? tables['Competitor'] : '-';
+
+            var minute = moment(interval, 'YYYY-MM-DD hh:mm A').minute();
+            var color = (minute === 0) ? color00 : color30;
+
+            rowHtml += `<td style="background-color:${color};">${tablesEPL === 0 ? '0' : tablesEPL}</td>
+                        <td style="background-color:${color};">${tablesCompetitor === 0 ? '0' : tablesCompetitor}</td>`;
+        });
+        rowHtml += '</tr>';
+        $('#combinedTable tbody').append(rowHtml);
+    });
+
+    var tableWidth = $('#combinedTable').outerWidth();
+    $('.top-scrollbar div').width(tableWidth);
+}
+
+setInterval(function() {
+    fetchDataForDate(selectedDate);
+    }, 30 * 60 * 1000);
+        fetchDataForDate(selectedDate);
+
+
+        $('.top-scrollbar').on('scroll', function() {
+            $('.scrollable-table').scrollLeft($(this).scrollLeft());
+        });
+
+        $('.scrollable-table').on('scroll', function() {
+            $('.top-scrollbar').scrollLeft($(this).scrollLeft());
+        });
+    });
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPL vs TCH Data Analysis</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" integrity="sha512-Kc323vGBEqzTmouAECnVceyQqyqdsSiqLQISBL29aUW4U/M7pSPA/gEUZQqv1cwx4OnYxTxve5UMg5GT6L4JJg==" crossorigin="anonymous" referrerpolicy="no-referrer" /><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css" integrity="sha512-Kc323vGBEqzTmouAECnVceyQqyqdsSiqLQISBL29aUW4U/M7pSPA/gEUZQqv1cwx4OnYxTxve5UMg5GT6L4JJg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment/min/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment-timezone/builds/moment-timezone-with-data.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-trendline@2.1.3/src/chartjs-plugin-trendline.min.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/js/all.min.js" integrity="sha512-6sSYJqDreZRZGkJ3b+YfdhB3MzmuP9R7X1QZ6g5aIXhRvR1Y/N/P47jmnkENm7YL3oqsmI6AK+V6AD99uWDnIw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script> <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/js/all.min.js" integrity="sha512-6sSYJqDreZRZGkJ3b+YfdhB3MzmuP9R7X1QZ6g5aIXhRvR1Y/N/P47jmnkENm7YL3oqsmI6AK+V6AD99uWDnIw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script> 
+</head>
+<style>
+    .daterangepicker .calendar-time {
+        display: none;
+    }
+
+    .toast {
+    position: fixed;
+    bottom: 20px;
+    left: 40%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, #4a90e2, #007aff);
+    color: #fff;
+    padding: 15px 25px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    font-size: 15px;
+    z-index: 1000;
+    display: none; 
+    font-family: Arial, sans-serif;
+    animation: pulse 1s infinite;
+}
+
+.toast-spinner {
+    margin-right: 10px;
+    font-size: 20px;
+}
+
+.toast-message {
+    font-weight: 500;
+}
+
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+</style>
+
+<body>
+    <div class="container">
+        <h3 class="mb-md-3 mb-4 text-center">EPL vs TCH Data Analysis</h3>
+        <a href="https://analytics.elitepokerlounge.com:3000/table" class="btn btn-primary position-fixed" style="top: 10px; left: 10px;"><i class="fa fa-table"></i></a>
+        <div class="row align-items-end">
+            <div class="col-md-5 col-6 mb-4">
+                <label for="daterange" class="form-label">Select Date Range:</label>
+                <input type="text" class="form-control" id="daterange" name="daterange">
+            </div>
+
+            <div class="col-md-5 col-6 mb-4">
+                <label for="chartType" class="form-label">Select Chart Type:</label>
+                <select id="chartType" class="form-select">
+                    <option value="line">Line Chart</option>
+                    <option value="bar">Bar Chart</option>
+                </select>
+            </div>
+
+       
+                <div class="col-md-2 col-12 text-center">
+                    <button id="exportButton" class="btn btn-secondary mb-4">Export to excel</button> 
+                </div>
+          
+            
+        </div>
+        <div class="row">
+            <div class="col-12 mb-4">
+                <div id="chartContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function () {
+            moment.tz.setDefault("America/Chicago");
+            var startDate, endDate;
+var fetchedData=[];
+            function setDateRangePicker() {
+                startDate = moment().startOf('day').add(10, 'hours');
+                endDate = moment().add(1, 'days').startOf('day').add(6, 'hours');
+
+                $('#daterange').daterangepicker({
+                    locale: {
+                        format: 'YYYY/MM/DD'
+                    },
+                    timePicker: true,
+                    timePicker24Hour: false,
+                    timePickerIncrement: 1,
+                    startDate: startDate,
+                    endDate: endDate,
+                    ranges: {
+                        'Today': [moment().startOf('day').add(10, 'hours'), moment().add(1, 'days').startOf('day').add(6, 'hours')],
+                        'Yesterday': [moment().subtract(1, 'days').startOf('day').add(10, 'hours'), moment().startOf('day').add(6, 'hours')],
+                        'This Week': [moment().startOf('week').day(1).add(10, 'hours'), moment().startOf('week').day(8).startOf('day').add(6, 'hours')],
+                        'Last Week': [moment().subtract(1, 'weeks').startOf('week').day(1).add(10, 'hours'), moment().subtract(1, 'weeks').startOf('week').day(8).startOf('day').add(6, 'hours')],
+                        'This Month': [moment().startOf('month').add(10, 'hours'), moment().endOf('month').add(1, 'days').startOf('day').add(6, 'hours')],
+                        'Last Month': [moment().subtract(1, 'months').startOf('month').add(10, 'hours'), moment().startOf('month').add(6, 'hours')],
+                    }
+                }, async function (start, end, label) {
+                    $('#daterange').val(start.format('YYYY-MM-DD hh:mm A') + ' - ' + end.format('YYYY-MM-DD hh:mm A'));
+                    startDate = start;
+                    endDate = end;
+                    await fetchData();
+                });
+            }
+
+function showLoadingToast(text) {
+    if ($('#loadingToast').length === 0) {
+        $('body').append(`
+            <div id="loadingToast" class="toast d-flex">
+                <span class="spinner-border spinner-border-sm toast-spinner" role="status" aria-hidden="true"></span>
+                <div class="toast-message">${text} data, please wait...</div>
+            </div>
+        `);
+        $('#loadingToast').fadeIn(200); 
+    }
+}
+
+function hideLoadingToast() {
+    $('#loadingToast').fadeOut(200, function() {
+        $(this).remove(); 
+    });
+}
+
+            setDateRangePicker();
+
+            var currentChartType = 'line';
+
+            $('#chartType').on('change', async function () {
+                currentChartType = $(this).val();
+                await fetchData();
+            });
+  
+            async function fetchData() {
+    if (!startDate || !endDate) {
+        alert('Please select a date.');
+        return;
+    }
+
+    try {
+        showLoadingToast('Loading');
+
+        const response = await $.ajax({
+            url: `https://analytics.elitepokerlounge.com:3000/fetch-data?startdate=${encodeURIComponent(startDate.format('YYYY-MM-DD HH:mm'))}&enddate=${encodeURIComponent(endDate.format('YYYY-MM-DD HH:mm'))}`,
+            method: 'GET',
+            dataType: 'json',
+        });
+
+        hideLoadingToast();
+        await populateChartsByDay(response);
+        fetchedData = [response];
+
+    } catch (error) {
+        hideLoadingToast();
+        console.error('Error fetching data:', error.responseText || error);
+        alert('Error fetching data.');
+    }
+}
+
+async function populateChartsByDay(data) {
+    $('#chartContainer').empty();
+
+    let daysInRange = getDaysInRange();
+    for (let day of daysInRange) {
+        await createChartForDay(day, data);
+    }
+}
+
+             async function createChartForDay(day, data) {
+                let canvasId = `chart-${day}`;
+                let chartContainer = `
+        <div class="position-relative mb-4">
+            <canvas id="${canvasId}" class="mb-4"></canvas>
+            <button class="btn btn-primary position-absolute top-0 end-0 m-2" onclick="downloadChart('${canvasId}', '${day}')">
+                <i class="fa fa-download"></i> ${day}
+            </button>
+        </div>`;
+    
+    $('#chartContainer').append(chartContainer);
+
+                let timestamps =  generateTimestampsForDay(day);
+                let eplData =  aggregateDataForDay(data.EPL, timestamps, day);
+                let tchData =  aggregateDataForDay(data.Competitor, timestamps, day);
+
+                let datasets = [
+                    {
+                        label: `EPL - Overall Tables (${day})`,
+                        data: eplData,
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        backgroundColor: 'rgba(54, 162, 235, 1)',
+                        fill: currentChartType === 'bar',
+                        tension: 0.4,
+                        trendlineLinear: {
+                            style: "rgba(54, 162, 235, 0.5)",
+                            lineStyle: "dotted",
+                            width: 2
+                        }
+                    },
+                    {
+                        label: `TCH - Overall Tables (${day})`,
+                        data: tchData,
+                        borderColor: 'rgba(255, 159, 64, 1)',
+                        backgroundColor: 'rgba(255, 159, 64, 1)',
+                        fill: currentChartType === 'bar',
+                        tension: 0.4,
+                        trendlineLinear: {
+                            style: "rgba(255, 159, 64, 0.5)",
+                            lineStyle: "dotted",
+                            width: 2
+                        }
+                    }
+                ];
+
+                 new Chart(document.getElementById(canvasId).getContext('2d'), {
+                    type: currentChartType,
+                    data: {
+                        labels: timestamps.map(ts => {
+                            let dateObj = new Date(ts);
+                            let hours = dateObj.getHours();
+                            let minutes = dateObj.getMinutes();
+                            let period = hours >= 12 ? 'PM' : 'AM';
+                            hours = hours % 12 || 12;
+                            minutes = minutes < 10 ? '0' + minutes : minutes;
+                            return `${hours}:${minutes} ${period}`;
+                        }),
+                        datasets: datasets
+                    },
+                    options: {
+                        scales: {
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Time'
+                                },
+                                ticks: {
+                                    autoSkip: true,
+                                    maxTicksLimit: 24,
+                                }
+                            },
+                            y: {
+                                // min: 0,            
+                            // max: 9, 
+                                title: {
+                                    display: true,
+                                    text: 'Number of Tables'
+                                },
+                                ticks: {
+                                    beginAtZero: true,
+                                    stepSize: 1,
+                                    callback: function (value) {
+                                        return Number.isInteger(value) ? value : null;
+                                    }
+                                }
+                            }
+                        },
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            title: {
+                                display: true,
+                                text: `Overall Tables Count for ${day}`
+                            }
+                        }
+                    }
+                });
+            }
+            function getDaysInRange() {
+                let days = [];
+                let currentDay = moment(startDate);
+                while (currentDay.isBefore(endDate)) {
+                    days.push(currentDay.format('YYYY-MM-DD'));
+                    currentDay.add(1, 'day');
+                }
+                return days;
+            }
+
+             function roundToNearestInterval(time, intervalMinutes) {
+                const remainder = time.minute() % intervalMinutes;
+                if (remainder === 0) return time;
+                return remainder < intervalMinutes / 2
+                    ? time.subtract(remainder, 'minutes')
+                    : time.add(intervalMinutes - remainder, 'minutes');
+            }
+
+             function generateTimestampsForDay(day) {
+                let timestamps = [];
+                let startOfDay = moment(day).add(10, 'hours');
+                let endOfDay = moment(day).add(1, 'day').add(6, 'hours');
+
+                while (startOfDay.isSameOrBefore(endOfDay)) {
+                    timestamps.push(startOfDay.format('YYYY-MM-DD hh:mm A'));
+                    startOfDay.add(30, 'minutes');
+                }
+
+                return timestamps;
+            }
+
+             function aggregateDataForDay(sourceData, timestamps) {
+                let dataForDay = new Array(timestamps.length).fill(0);
+
+                if (!sourceData || !sourceData.labels || !sourceData.tables) {
+                    return dataForDay;
+                }
+
+                sourceData.labels.forEach((time, index) => {
+                    let roundedTime = roundToNearestInterval(moment(time, 'YYYY-MM-DD hh:mm A'), 30).format('YYYY-MM-DD hh:mm A');
+                    const timestampIndex = timestamps.findIndex(ts => ts === roundedTime);
+                    if (timestampIndex !== -1) {
+                        dataForDay[timestampIndex] += sourceData.tables[index];
+                    }
+                });
+
+                return dataForDay;
+            }
+
+$('#exportButton').on('click',async function () {
+    showLoadingToast('Exporting'); 
+    await exportToExcel(fetchedData);
+    hideLoadingToast();
+   
+});
+
+async function exportToExcel(dataArray) {
+    if (!Array.isArray(dataArray) || dataArray.length === 0) {
+        console.error("No data available for export.");
+        hideLoadingToast();
+        return;
+    }
+
+    const data = dataArray[0]; 
+    const workbook = XLSX.utils.book_new(); 
+
+    
+    const dateRange = getDatesInRange(startDate, endDate);
+
+    for (let date of dateRange) {
+        const timeSlots = generateTimeSlots(date); 
+        let combinedSheetData = []; 
+
+    
+        combinedSheetData.push(["EPL DATA"]);
+        combinedSheetData.push(["GAME NAMES", ...timeSlots]);
+
+  
+        if (data.EPL && Array.isArray(data.EPL.game_name)) {
+            const eplDataMap = {};
+
+            data.EPL.labels.forEach((label, index) => {
+                const labelDateTime = moment(label, "YYYY-MM-DD hh:mm A");
+                const startOfDay = moment(date).hour(10);  
+                const endOfDay = moment(date).add(1, 'day').hour(6).minute(30); 
+
+                if (labelDateTime.isBetween(startOfDay, endOfDay, null, '[)')) {  
+                    const roundedTime = roundToNearestIntervalExcel(labelDateTime, 30).format("hh:mm A");
+                    const gameName = data.EPL.game_name[index] || ""; 
+                    const tableValue = data.EPL.tables[index] >= 0 ? data.EPL.tables[index] : '-';  
+
+        
+                    if (!eplDataMap[gameName]) {
+                        eplDataMap[gameName] = new Array(timeSlots.length).fill('-');  
+                    }
+
+            
+                    const slotIndex = timeSlots.findIndex(ts => ts === roundedTime);
+                    if (slotIndex !== -1) {
+                        eplDataMap[gameName][slotIndex] = tableValue;  
+                    }
+                }
+            });
+
+           
+            for (const [gameName, tables] of Object.entries(eplDataMap)) {
+                combinedSheetData.push([gameName, ...tables]);
+            }
+        } else {
+            console.warn("EPL data is not structured correctly:", data.EPL);
+        }
+
+
+        combinedSheetData.push([]);
+        combinedSheetData.push(["TCH DATA"]);
+        combinedSheetData.push(["GAME NAMES", ...timeSlots]);
+
+   
+        if (data.Competitor && Array.isArray(data.Competitor.game_name)) {
+            const competitorDataMap = {};
+
+    
+            data.Competitor.labels.forEach((label, index) => {
+                const labelDateTime = moment(label, "YYYY-MM-DD hh:mm A");
+                const startOfDay = moment(date).hour(10);  
+                const endOfDay = moment(date).add(1, 'day').hour(6).minute(30);  
+
+                if (labelDateTime.isBetween(startOfDay, endOfDay, null, '[)')) {  
+                    const roundedTime = roundToNearestInterval(labelDateTime, 30).format("hh:mm A");
+                    const gameName = data.Competitor.game_name[index] || "";  
+                    const tableValue = data.Competitor.tables[index] >= 0 ? data.Competitor.tables[index] : '-';  
+                    if (!competitorDataMap[gameName]) {
+                        competitorDataMap[gameName] = new Array(timeSlots.length).fill('-');  
+                    }
+
+                 
+                    const slotIndex = timeSlots.findIndex(ts => ts === roundedTime);
+                    if (slotIndex !== -1) {
+                        competitorDataMap[gameName][slotIndex] = tableValue;  
+                    }
+                }
+            });
+
+         
+            for (const [gameName, tables] of Object.entries(competitorDataMap)) {
+                combinedSheetData.push([gameName, ...tables]);
+            }
+        } else {
+            console.warn("Competitor data is not structured correctly:", data.Competitor);
+        }
+
+        
+        const sheetName = moment(date).format("YYYY-MM-DD");  
+        let combinedWorksheet = XLSX.utils.aoa_to_sheet(combinedSheetData);
+        XLSX.utils.book_append_sheet(workbook, combinedWorksheet, sheetName);
+        await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+   
+    XLSX.writeFile(workbook, `EPL_vs_TCH_Data_${moment().format('YYYY-MM-DD')}.xlsx`);
+}
+
+
+function getDatesInRange(start, end) {
+    const dates = [];
+    let currentDate = moment(start);
+    while (currentDate.isSameOrBefore(moment(end))) {
+        dates.push(currentDate.format("YYYY-MM-DD"));
+        currentDate.add(1, 'days');
+    }
+    return dates;
+}
+
+
+function roundToNearestIntervalExcel(time, interval) {
+    const minutes = Math.round(time.minute() / interval) * interval;
+    return time.minute(minutes).second(0);
+}
+
+
+function generateTimeSlots(date) {
+    const slots = [];
+    const start = moment(date).startOf('day').hour(10); 
+    const end = moment(date).add(1, 'day').hour(6).minute(30); 
+
+
+    let current = start.clone();
+    while (current.isBefore(end)) { 
+        slots.push(current.format("hh:mm A"));
+        current.add(30, 'minutes'); 
+    }
+
+    return slots;
+}
+            fetchData();
+
+        });
+
+        function downloadChart(canvasId, day) {
+    let canvas = document.getElementById(canvasId);
+    let ctx = canvas.getContext('2d');
+    let tempCanvas = document.createElement('canvas');
+    tempCanvas.width = canvas.width;
+    tempCanvas.height = canvas.height;
+    let tempCtx = tempCanvas.getContext('2d');
+    tempCtx.fillStyle = 'white';
+    tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+    tempCtx.drawImage(canvas, 0, 0);
+    let link = document.createElement('a');
+    link.href = tempCanvas.toDataURL('image/png');
+    link.download = `chart-${day}.png`;
+    link.click();
+}
+
+    </script>
+
+</body>
+
+</html>
+
