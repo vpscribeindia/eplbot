@@ -11,10 +11,26 @@ const moment = require('moment-timezone');
 const express = require('express');
 const cors = require('cors');
 const app = express();
-const https = require('https');
+const http = require('http');
 const nodemailer = require("nodemailer");
-app.use(cors());
 require("dotenv").config();
+const allowedOrigins = ['*'];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+app.use(cors(corsOptions));
 const dbConfig = {
     host: process.env.MYSQL_HOST,
     user: process.env.MYSQL_USER,
@@ -26,11 +42,9 @@ const dbConfig = {
 const uploadDir = path.join(__dirname, 'upload');
 
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'charts.html'));
-});
-app.get('/table', (req, res) => {
     res.sendFile(path.join(__dirname, 'table.html'));
 });
+
 
 puppeteer.use(StealthPlugin());
 
@@ -142,11 +156,11 @@ async function openUrl(url, tableName) {
                 const tables = parseInt(row[1], 10); 
                 const waiting = parseInt(row[2], 10);
                 const timestamp = moment().tz('America/Chicago').format('YYYY-MM-DD HH:mm:ss');
-                
+		const roundedTimestamp = roundToNearest30Min(timestamp);                
                 const query = `INSERT INTO ${tableName} (game_name, tables, waiting, timestamp) VALUES (?, ?, ?, ?)`;
 
                 try {
-                    await connection.execute(query, [gameName, tables, waiting, timestamp]);
+                    await connection.execute(query, [gameName, tables, waiting, roundedTimestamp]);
                 } catch (err) {
                     console.error("SQL Error:", err.message);
                 }
@@ -178,7 +192,8 @@ async function fetchData(conn, table, timeStart, timeEnd) {
     };
 
     rows.forEach(row => {
-        const formattedTimestamp = moment(row.timestamp).local().format('YYYY-MM-DD hh:mm A');
+	const roundedTimestamp = roundToNearest30Min(row.timestamp);
+        const formattedTimestamp = moment(roundedTimestamp).local().format('YYYY-MM-DD hh:mm A');
         data.labels.push(formattedTimestamp);
         data.game_name.push(row.game_name);
         data.tables.push(row.tables);
@@ -220,12 +235,12 @@ const sendEmail = async (data) => {
 };
 
 function roundToNearest30Min(timestamp) {
-    var time = moment.tz(timestamp, 'YYYY-MM-DD HH:mm');
+    var time = moment(timestamp, 'YYYY-MM-DD HH:mm:ss');
     var roundedTime = time.clone().startOf('minute');
     var minutes = roundedTime.minutes();
     var roundedMinutes = Math.round(minutes / 30) * 30;
     roundedTime.minutes(roundedMinutes).seconds(0);
-    return roundedTime.format('YYYY-MM-DD HH:mm');
+    return roundedTime.format('YYYY-MM-DD HH:mm:ss');
 }
 
 const tablesToCheck = ["poker_wait_list_epl", "poker_wait_list_competitor"]; 
@@ -244,15 +259,15 @@ const checkMissingIntervals = async () => {
 
         for (let table of tablesToCheck) {
             console.log(`Checking table: ${table}`);
-            const data = await fetchData(conn, table, startTime.format("YYYY-MM-DD HH:mm"), endTime.format("YYYY-MM-DD HH:mm"));
+            const data = await fetchData(conn, table, startTime.format("YYYY-MM-DD HH:mm:ss"), endTime.format("YYYY-MM-DD HH:mm:ss"));
 
-            const dbTimestamps = data.labels.map(time => roundToNearest30Min(time));
+	    const dbTimestamps = data.labels.map(time => moment(time, 'YYYY-MM-DD hh:mm A').format("YYYY-MM-DD HH:mm:ss"));
 
             let missingIntervals = [];
             let current = startTime.clone();
 
             while (current.isBefore(endTime) || current.isSame(endTime)) {
-                const expectedTimestamp = current.format("YYYY-MM-DD HH:mm");
+                const expectedTimestamp = current.format("YYYY-MM-DD HH:mm:ss");
 
                 if (!dbTimestamps.includes(expectedTimestamp)) {
                     missingIntervals.push(current.format("YYYY-MM-DD hh:mm A"));
@@ -292,11 +307,15 @@ async function fetchAndExportData(tableName, connection,filePath, timeStart, tim
     try {
         const data = await fetchData(connection, tableName, timeStart, timeEnd);
 
-        const csvData = data.labels.map((label, index) => ({
-            game_name: data.game_name[index],
-            tables: data.tables[index],
-            timestamp: moment(label, 'YYYY-MM-DD hh:mm A').format('YYYY-MM-DD HH:mm:ss'),
-        }));
+         const csvData = data.labels.map((label, index) => {
+            const rawTimestamp = moment(label, 'YYYY-MM-DD hh:mm A').format('YYYY-MM-DD HH:mm');
+
+            return {
+                game_name: data.game_name[index],
+                tables: data.tables[index],
+                timestamp: rawTimestamp,
+            };
+        });
 
         const csv = parse(csvData, {
             fields: ['game_name', 'tables', 'timestamp'],
@@ -389,13 +408,13 @@ if (!startdate) {
 let timeStart, timeEnd;
 
 if (!enddate) {
-    const selectedDate = moment.tz(startdate, 'YYYY-MM-DD HH:mm', 'America/Chicago').startOf('day');
-    const selectedEndDate =moment.tz(startdate, 'YYYY-MM-DD HH:mm', 'America/Chicago').endOf('day').hour(23).minute(45);
+    const selectedDate = moment.tz(startdate, 'YYYY-MM-DD HH:mm', 'America/Chicago').startOf('day').hour(9).minute(30);
+    const selectedEndDate =moment.tz(startdate, 'YYYY-MM-DD HH:mm', 'America/Chicago').add(1, 'day').startOf('day').hour(6).minute(45);
     timeStart = selectedDate.format('YYYY-MM-DD HH:mm');
     timeEnd = selectedEndDate.format('YYYY-MM-DD HH:mm');
 } else {
-    const selectedStartDate = moment.tz(startdate, 'YYYY-MM-DD HH:mm', 'America/Chicago');
-    const selectedEndDate = moment.tz(enddate, 'YYYY-MM-DD HH:mm', 'America/Chicago').add(15, 'minutes');
+    const selectedStartDate = moment.tz(startdate, 'YYYY-MM-DD HH:mm', 'America/Chicago').startOf('day').hour(9).minute(30);
+    const selectedEndDate = moment.tz(enddate, 'YYYY-MM-DD HH:mm', 'America/Chicago').add(1, 'day').startOf('day').hour(6).minute(45);
 
     timeStart = selectedStartDate.format('YYYY-MM-DD HH:mm');
     timeEnd = selectedEndDate.format('YYYY-MM-DD HH:mm');
@@ -445,9 +464,10 @@ cron.schedule('50 23 * * *', () => {
     const PokerWaitListCompetitorName = `tch_${today}.csv`;
     const EPL_PATH = path.join(uploadDir, PokerWaitListEplName);
     const TCH_PATH = path.join(uploadDir, PokerWaitListCompetitorName);
+    const currentMonth = moment().tz('America/Chicago').format('MMMM');
     const currentYear = moment().tz('America/Chicago').format('YYYY');
-    const DBFS_PATH_EPL = `/FileStore/tables/EPL/EPL_Table_count/${currentYear}/${PokerWaitListEplName}`;
-    const DBFS_PATH_TCH = `/FileStore/tables/EPL/TCH_Table_count/${currentYear}/${PokerWaitListCompetitorName}`;
+    const DBFS_PATH_EPL = `/FileStore/tables/EPL/EPL_Table_count/${currentYear}/${currentMonth}/${PokerWaitListEplName}`;
+    const DBFS_PATH_TCH = `/FileStore/tables/EPL/TCH_Table_count/${currentYear}/${currentMonth}/${PokerWaitListCompetitorName}`;
 
      pushtodbfs(EPL_PATH, TCH_PATH, DBFS_PATH_EPL, DBFS_PATH_TCH);
     console.log("Daily DBFS task executed.");
@@ -459,17 +479,13 @@ cron.schedule('50 23 * * *', () => {
 
 //testing triggers
 // app.get('/pickupdata-trigger', () => {
-//     checkMissingIntervals();
+//      checkMissingIntervals();
 // });
 
 //server configs
 const port = process.env.SERVER_PORT;
-const sslServer = https.createServer(
-  {
-    key: fs.readFileSync(path.join(__dirname, 'ssl', 'key.pem')),
-    cert: fs.readFileSync(path.join(__dirname, 'ssl', 'cert.pem')),
-  },
-  app
+const sslServer = http.createServer(
+   app
 );
 
 sslServer.listen(port, () => {
